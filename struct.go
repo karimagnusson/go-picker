@@ -111,34 +111,53 @@ func pickerToStructWithDepth(picker *Picker, target interface{}, currentDepth, m
 					field.Set(newSlice)
 				} else {
 					// Handle primitive type slices using GetTypedArray
-					var valueType ValueType
+					var arrayValue reflect.Value
 					
 					switch elemType.Kind() {
 					case reflect.String:
-						valueType = ValueTypeString
+						result := GetTypedArray[string](picker, jsonTag)
+						if len(result) > 0 {
+							arrayValue = reflect.ValueOf(result)
+						}
 					case reflect.Int64:
-						valueType = ValueTypeInt
+						result := GetTypedArray[int64](picker, jsonTag)
+						if len(result) > 0 {
+							arrayValue = reflect.ValueOf(result)
+						}
 					case reflect.Float64:
-						valueType = ValueTypeFloat
+						result := GetTypedArray[float64](picker, jsonTag)
+						if len(result) > 0 {
+							arrayValue = reflect.ValueOf(result)
+						}
 					case reflect.Bool:
-						valueType = ValueTypeBool
+						result := GetTypedArray[bool](picker, jsonTag)
+						if len(result) > 0 {
+							arrayValue = reflect.ValueOf(result)
+						}
 					default:
 						// Handle pointer types for big numbers
 						switch elemType {
 						case reflect.TypeOf((*big.Int)(nil)):
-							valueType = ValueTypeBigInt
+							result := GetTypedArray[*big.Int](picker, jsonTag)
+							if len(result) > 0 {
+								arrayValue = reflect.ValueOf(result)
+							}
 						case reflect.TypeOf((*big.Float)(nil)):
-							valueType = ValueTypeBigFloat
+							result := GetTypedArray[*big.Float](picker, jsonTag)
+							if len(result) > 0 {
+								arrayValue = reflect.ValueOf(result)
+							}
 						case reflect.TypeOf((*big.Rat)(nil)):
-							valueType = ValueTypeBigRat
+							result := GetTypedArray[*big.Rat](picker, jsonTag)
+							if len(result) > 0 {
+								arrayValue = reflect.ValueOf(result)
+							}
 						default:
 							return fmt.Errorf("unsupported slice element type %s in %s.%s", elemType.String(), typ.Name(), fieldType.Name)
 						}
 					}
 					
-					typedArray := picker.GetTypedArray(jsonTag, valueType)
-					if typedArray != nil {
-						arrayValue := reflect.ValueOf(typedArray)
+					if arrayValue.IsValid() {
 						field.Set(arrayValue)
 					}
 				}

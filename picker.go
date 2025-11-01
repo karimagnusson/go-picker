@@ -10,18 +10,6 @@ import (
 	"time"
 )
 
-type ValueType int
-
-const (
-	ValueTypeString ValueType = iota
-	ValueTypeInt
-	ValueTypeFloat
-	ValueTypeBool
-	ValueTypeBigInt
-	ValueTypeBigFloat
-	ValueTypeBigRat
-)
-
 type Picker struct {
 	data         map[string]interface{}
 	errorKeys    []string
@@ -283,26 +271,6 @@ func (p *Picker) GetArrayOr(key string, fallback []interface{}) []interface{} {
 		return fallback
 	}
 	return value
-}
-
-func (p *Picker) GetTypedArray(key string, valueType ValueType) interface{} {
-	value, ok := p.data[key].([]interface{})
-	if !ok {
-		p.addError(key)
-		return nil
-	}
-
-	result, err := typedArray(value, valueType)
-	if err != nil {
-		p.addError(key)
-		return nil
-	}
-
-	return result
-}
-
-func (p *Picker) HasErrors() bool {
-	return len(p.errorKeys) > 0
 }
 
 func (p *Picker) Confirm() error {

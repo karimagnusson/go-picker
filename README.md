@@ -56,7 +56,7 @@ func main() {
     verified := profile.GetBool("verified")
     
     // Get typed arrays
-    scores := p.GetTypedArray("scores", picker.ValueTypeFloat).([]float64)
+    scores := picker.GetTypedArray[float64](p, "scores")
     
     // Validate all operations succeeded
     if err := p.Confirm(); err != nil {
@@ -121,9 +121,9 @@ userPicker := p.GetNewPicker("user")
 items := p.GetArray("items")
 
 // Get typed arrays
-names := p.GetTypedArray("names", picker.ValueTypeString).([]string)
-scores := p.GetTypedArray("scores", picker.ValueTypeFloat).([]float64)
-flags := p.GetTypedArray("flags", picker.ValueTypeBool).([]bool)
+names := picker.GetTypedArray[string](p, "names")
+scores := picker.GetTypedArray[float64](p, "scores")
+flags := picker.GetTypedArray[bool](p, "flags")
 
 // Array of objects
 users := p.NestedArray("users")
@@ -162,9 +162,8 @@ if err != nil {
 
 ```go
 // Check for any errors
-if p.HasErrors() {
-    errorKeys := p.ErrorKeys()
-    fmt.Printf("Errors in keys: %v\n", errorKeys)
+if err := p.Confirm(); err != nil {
+    fmt.Printf("Validation errors: %v\n", err)
 }
 
 // Validate all operations (fails if any errors)
@@ -197,18 +196,21 @@ jsonStr := p.ToJsonString()
 prettyJson := p.ToPrettyJsonString()
 ```
 
-## Value Types
+## Typed Arrays
 
-For typed array extraction:
+The generic `GetTypedArray` function provides type-safe array extraction:
 
 ```go
-picker.ValueTypeString    // []string
-picker.ValueTypeInt       // []int64  
-picker.ValueTypeFloat     // []float64
-picker.ValueTypeBool      // []bool
-picker.ValueTypeBigInt    // []*big.Int
-picker.ValueTypeBigFloat  // []*big.Float
-picker.ValueTypeBigRat    // []*big.Rat
+// Basic types
+strings := picker.GetTypedArray[string](p, "names")        // []string
+ints := picker.GetTypedArray[int64](p, "numbers")          // []int64  
+floats := picker.GetTypedArray[float64](p, "scores")       // []float64
+bools := picker.GetTypedArray[bool](p, "flags")            // []bool
+
+// Big number types
+bigints := picker.GetTypedArray[*big.Int](p, "large")      // []*big.Int
+bigfloats := picker.GetTypedArray[*big.Float](p, "precise") // []*big.Float
+bigrats := picker.GetTypedArray[*big.Rat](p, "ratios")     // []*big.Rat
 ```
 
 ## Error Handling Philosophy
