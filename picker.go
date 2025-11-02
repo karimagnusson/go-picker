@@ -300,48 +300,10 @@ func (p *Picker) Keys() []string {
 	return keys
 }
 
-func (p *Picker) AddKey(key string, value interface{}) {
-	p.data[key] = value
-}
-
-func (p *Picker) DelKey(key string) {
-	delete(p.data, key)
-}
-
 func (p *Picker) GetData() map[string]interface{} {
 	return p.data
 }
 
-func (p *Picker) Extend(other *Picker) {
-	for k, v := range other.data {
-		p.data[k] = v
-	}
-}
-
-func (p *Picker) Copy() *Picker {
-	data := make(map[string]interface{})
-	for k, v := range p.data {
-		data[k] = v
-	}
-	return NewPicker(data)
-}
-
-func (p *Picker) FlatCopy() *Picker {
-	flat := make(map[string]interface{})
-	var flatten func(prefix string, data map[string]interface{})
-	flatten = func(prefix string, data map[string]interface{}) {
-		for k, v := range data {
-			switch v := v.(type) {
-			case map[string]interface{}:
-				flatten(prefix+k+".", v)
-			default:
-				flat[prefix+k] = v
-			}
-		}
-	}
-	flatten("", p.data)
-	return NewPicker(flat)
-}
 
 func (p *Picker) ToJsonString() string {
 	jsonBytes, err := json.Marshal(p.data)

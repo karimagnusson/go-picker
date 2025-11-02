@@ -10,28 +10,29 @@ Traditional JSON parsing in Go is verbose and error-prone:
 
 ```go
 // Traditional approach - bloated with error checking
-var name string
-var age int64
-var email string
+userObj, ok := data["user"].(map[string]interface{})
+if !ok {
+    return errors.New("invalid user")
+}
 
-if userObj, ok := data["user"].(map[string]interface{}); ok {
-    if nameVal, ok := userObj["name"].(string); ok {
-        name = nameVal
-    } else {
-        return errors.New("invalid name")
-    }
-    if ageVal, ok := userObj["age"].(float64); ok {
-        age = int64(ageVal)
-    } else {
-        return errors.New("invalid age")
-    }
-    if profileObj, ok := userObj["profile"].(map[string]interface{}); ok {
-        if emailVal, ok := profileObj["email"].(string); ok {
-            email = emailVal
-        } else {
-            return errors.New("invalid email")
-        }
-    }
+name, ok := userObj["name"].(string)
+if !ok {
+    return errors.New("invalid name")
+}
+
+age, ok := userObj["age"].(float64)
+if !ok {
+    return errors.New("invalid age") 
+}
+
+profileObj, ok := userObj["profile"].(map[string]interface{})
+if !ok {
+    return errors.New("invalid profile")
+}
+
+email, ok := profileObj["email"].(string)
+if !ok {
+    return errors.New("invalid email")
 }
 ```
 
@@ -60,7 +61,7 @@ if err := p.Confirm(); err != nil {
 - **🔒 Type-safe** - Generic functions return exact types without casting
 - **🛡️ Strict Validation** - Unlike `json.Unmarshal`, requires ALL fields present and valid
 - **🎯 Precise Errors** - Know exactly which fields failed with detailed paths
-- **🌳 Nested Support** - Errors from nested pickers bubble up to the original
+- **🌳 Nested Support** - Errors from nested pickers are collected in the original
 - **⚡ Efficient** - Collect all errors in one pass, validate once
 
 ## Installation
@@ -91,6 +92,7 @@ func main() {
         "scores": [85.5, 92.0, 78.5]
     }`
     
+    // Parse JSON string into a picker
     p, err := picker.NewPickerFromJson(jsonStr)
     if err != nil {
         panic(err)
@@ -101,10 +103,9 @@ func main() {
     age := p.GetInt("age")
     email := p.GetStringOr("email", "no-email")
     
-    // Navigate nested objects
-    profile := p.Nested("profile")
-    location := profile.GetString("location")
-    verified := profile.GetBool("verified")
+    // Navigate nested objects with chaining
+    location := p.Nested("profile").GetString("location")
+    verified := p.Nested("profile").GetBool("verified")
     
     // Get typed arrays
     scores := picker.GetTypedArray[float64](p, "scores")
@@ -114,7 +115,7 @@ func main() {
         fmt.Printf("Validation errors: %v\n", err)
     }
     
-    fmt.Printf("Name: %s, Age: %d, Location: %s\n", name, age, location)
+    fmt.Printf("Name: %s, Age: %d, Location: %s, Verified: %t\n", name, age, location, verified)
 }
 ```
 
@@ -158,10 +159,11 @@ if err != nil {
 ```go
 // This JSON succeeds with json.Unmarshal but FAILS with picker:
 {
-    "name": "John"  // Missing: id, email, profile, tags
+    "name": "John"
+    // Missing required fields: id, email, profile, tags
 }
 
-// json.Unmarshal result: User{Name: "John", ID: 0, Email: "", ...}
+// json.Unmarshal result: User{Name: "John", ID: 0, Email: "", Profile: nil, Tags: nil}
 // picker.PickToStruct error: "Missing required fields: id, email, profile, tags"
 ```
 
@@ -183,7 +185,7 @@ p, err := picker.NewPickerFromJson(jsonStr)
 data := map[string]interface{}{"key": "value"}
 p := picker.NewPicker(data)
 
-// From HTTP request
+// From HTTP request body
 p, err := picker.NewPickerFromRequest(r)
 ```
 
@@ -221,13 +223,13 @@ userPicker := p.GetNewPicker("user")
 ### Arrays
 
 ```go
-// Get raw array
+// Get raw array (returns []interface{})
 items := p.GetArray("items")
 
-// Get typed arrays
-names := picker.GetTypedArray[string](p, "names")
-scores := picker.GetTypedArray[float64](p, "scores")
-flags := picker.GetTypedArray[bool](p, "flags")
+// Get typed arrays (returns exact types)
+names := picker.GetTypedArray[string](p, "names")     // returns []string
+scores := picker.GetTypedArray[float64](p, "scores")   // returns []float64
+flags := picker.GetTypedArray[bool](p, "flags")       // returns []bool
 
 // Array of objects - NestedArray returns array of nested pickers
 users := p.NestedArray("users")  // Returns *NestedPickerArray
@@ -237,9 +239,8 @@ for i, user := range users.Items {  // Each 'user' is a *Picker
     fmt.Printf("User %d: %s (%s)\n", i, name, email)
 }
 
-// Safe item access with bounds checking
-firstUser := users.GetItem(0)      // Returns *Picker, errors to 'p'
-firstName := firstUser.GetString("name")  // Errors collected in 'p'
+// Safe item access with bounds checking and chaining
+firstName := users.GetItem(0).GetString("name")  // Errors collected in 'p'
 
 // ALL errors from nested pickers are validated in the original picker
 if err := p.Confirm(); err != nil {
@@ -290,14 +291,6 @@ if p.HasKey("optional_field") {
 
 // Get all keys
 keys := p.Keys()
-
-// Manipulate data
-p.AddKey("new_field", "value")
-p.DelKey("unwanted_field")
-
-// Copy and transform
-copy := p.Copy()
-flat := p.FlatCopy() // Flattens nested objects with dot notation
 
 // Serialization
 jsonStr := p.ToJsonString()
@@ -352,7 +345,7 @@ go-picker uses an error collection approach that eliminates repetitive error che
 
 ### Critical: Nested Error Collection
 
-**Errors from nested pickers automatically bubble up to the original picker:**
+**Errors from nested pickers are automatically collected in the original picker:**
 
 ```go
 p := picker.NewPicker(data)
