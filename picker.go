@@ -232,11 +232,15 @@ func (p *Picker) GetDate(key string) time.Time {
 	return parsedTime
 }
 func (p *Picker) GetDateOr(key string, fallback time.Time) time.Time {
-	value, ok := p.data[key].(time.Time)
+	value, ok := p.data[key].(string)
 	if !ok {
 		return fallback
 	}
-	return value
+	parsedTime, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return fallback
+	}
+	return parsedTime
 }
 
 func (p *Picker) GetObject(key string) map[string]interface{} {
@@ -292,31 +296,8 @@ func (p *Picker) HasKey(key string) bool {
 	return ok
 }
 
-func (p *Picker) Keys() []string {
-	keys := make([]string, 0, len(p.data))
-	for k := range p.data {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 func (p *Picker) GetData() map[string]interface{} {
 	return p.data
 }
 
 
-func (p *Picker) ToJsonString() string {
-	jsonBytes, err := json.Marshal(p.data)
-	if err != nil {
-		return "{}"
-	}
-	return string(jsonBytes)
-}
-
-func (p *Picker) ToPrettyJsonString() string {
-	jsonBytes, err := json.MarshalIndent(p.data, "", "  ")
-	if err != nil {
-		return "{}"
-	}
-	return string(jsonBytes)
-}

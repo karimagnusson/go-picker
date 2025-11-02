@@ -289,12 +289,13 @@ if p.HasKey("optional_field") {
     value := p.GetString("optional_field")
 }
 
-// Get all keys
-keys := p.Keys()
+// Get detailed error information
+errorKeys := p.ErrorKeys()  // Returns []string with exact paths
+fmt.Printf("Failed keys: %v\n", errorKeys)
 
-// Serialization
-jsonStr := p.ToJsonString()
-prettyJson := p.ToPrettyJsonString()
+// Access underlying data if needed
+data := p.GetData()  // Returns map[string]interface{}
+
 ```
 
 ## Typed Arrays
