@@ -67,7 +67,7 @@ if err := p.Confirm(); err != nil {
 ## Installation
 
 ```bash
-go get github.com/karimagnusson/go-picker@v0.1.0
+go get github.com/karimagnusson/go-picker
 ```
 
 ## Quick Start
@@ -77,7 +77,7 @@ package main
 
 import (
     "fmt"
-    "github.com/karimagnusson/picker"
+    "github.com/karimagnusson/go-picker"
 )
 
 func main() {
