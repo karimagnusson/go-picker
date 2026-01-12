@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,6 +43,47 @@ func NewPicker(data map[string]interface{}) *Picker {
 		isNested:     false,
 		nestedPicker: nil,
 	}
+}
+
+func Pick[T any](data map[string]interface{}, fn func(*Picker) T) (T, error) {
+	inst := NewPicker(data)
+	result := fn(inst)
+	err := inst.Confirm()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return result, nil
+}
+
+func PickFromString[T any](jsonStr string, fn func(*Picker) T) (T, error) {
+	inst, err := NewPickerFromJson(jsonStr)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	result := fn(inst)
+	err = inst.Confirm()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return result, nil
+}
+
+func PickFromRequest[T any](r *http.Request, fn func(*Picker) T) (T, error) {
+	inst, err := NewPickerFromRequest(r)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	result := fn(inst)
+	err = inst.Confirm()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return result, nil
 }
 
 func newNestedPicker(data map[string]interface{}, parent *Picker, key string) *Picker {
@@ -117,20 +158,20 @@ func (p *Picker) GetStringOr(key string, fallback string) string {
 }
 
 func (p *Picker) GetInt(key string) int64 {
-	value, ok := p.data[key].(int64)
+	value, ok := p.data[key].(float64)
 	if !ok {
 		p.addError(key)
 		return 0
 	}
-	return value
+	return int64(value)
 }
 
 func (p *Picker) GetIntOr(key string, fallback int64) int64 {
-	value, ok := p.data[key].(int64)
+	value, ok := p.data[key].(float64)
 	if !ok {
 		return fallback
 	}
-	return value
+	return int64(value)
 }
 
 func (p *Picker) GetFloat(key string) float64 {
@@ -155,57 +196,6 @@ func (p *Picker) GetBool(key string) bool {
 	if !ok {
 		p.addError(key)
 		return false
-	}
-	return value
-}
-
-func (p *Picker) GetBigInt(key string) *big.Int {
-	value, ok := p.data[key].(*big.Int)
-	if !ok {
-		p.addError(key)
-		return nil
-	}
-	return value
-}
-
-func (p *Picker) GetBigIntOr(key string, fallback *big.Int) *big.Int {
-	value, ok := p.data[key].(*big.Int)
-	if !ok {
-		return fallback
-	}
-	return value
-}
-
-func (p *Picker) GetBigFloat(key string) *big.Float {
-	value, ok := p.data[key].(*big.Float)
-	if !ok {
-		p.addError(key)
-		return nil
-	}
-	return value
-}
-
-func (p *Picker) GetBigFloatOr(key string, fallback *big.Float) *big.Float {
-	value, ok := p.data[key].(*big.Float)
-	if !ok {
-		return fallback
-	}
-	return value
-}
-
-func (p *Picker) GetBigRat(key string) *big.Rat {
-	value, ok := p.data[key].(*big.Rat)
-	if !ok {
-		p.addError(key)
-		return nil
-	}
-	return value
-}
-
-func (p *Picker) GetBigRatOr(key string, fallback *big.Rat) *big.Rat {
-	value, ok := p.data[key].(*big.Rat)
-	if !ok {
-		return fallback
 	}
 	return value
 }
@@ -300,4 +290,53 @@ func (p *Picker) GetData() map[string]interface{} {
 	return p.data
 }
 
+// array
 
+type NestedPickerArray struct {
+	nestedKey string
+	parent    *Picker
+	Items     []*Picker
+}
+
+func newNestedPickerArray(parent *Picker, items []*Picker) *NestedPickerArray {
+	return &NestedPickerArray{
+		parent: parent,
+		Items:  items,
+	}
+}
+
+func (npa *NestedPickerArray) GetItem(index int) *Picker {
+	if index < 0 || index >= len(npa.Items) {
+		npa.parent.addError(npa.nestedKey + "[" + strconv.Itoa(index) + "]")
+		return NewPicker(map[string]interface{}{})
+	}
+	return npa.Items[index]
+}
+
+func convert[T any](items []interface{}) ([]T, error) {
+	result := make([]T, 0, len(items))
+	for _, item := range items {
+		if typedItem, ok := item.(T); ok {
+			result = append(result, typedItem)
+		} else {
+			return nil, errors.New("error")
+		}
+	}
+	return result, nil
+}
+
+func GetTypedArray[T any](p *Picker, key string) []T {
+	value, ok := p.data[key].([]interface{})
+	if !ok {
+		p.addError(key)
+		return []T{}
+	}
+
+	result, err := convert[T](value)
+	if err != nil {
+		p.addError(key)
+		return []T{}
+	}
+
+	return result
+}

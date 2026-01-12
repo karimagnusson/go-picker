@@ -119,59 +119,97 @@ func main() {
 }
 ```
 
-## Strict Struct Validation
+## Generic Pick Functions
 
-**When you need guaranteed data completeness (unlike permissive `json.Unmarshal`)**
+**Parse and validate JSON in one step with type-safe results**
 
-`PickToStruct` provides strict validation - **ALL fields must be present and valid**. Perfect for APIs, configuration parsing, and data integrity checks where missing or invalid data should fail fast.
+The `Pick` family of functions combines parsing, extraction, and validation into a single operation, returning your custom struct type directly.
+
+### Pick - From map[string]interface{}
 
 ```go
 type User struct {
-    ID       int64     `json:"id"`       // Must exist and be valid int64
-    Name     string    `json:"name"`     // Must exist and be valid string
-    Email    string    `json:"email"`    // Must exist and be valid string
-    Profile  *Profile  `json:"profile"`  // Must exist and be valid object
-    Tags     []string  `json:"tags"`     // Must exist and be valid string array
+    Name  string
+    Email string
+    Age   int64
 }
 
-type Profile struct {
-    Location string `json:"location"`   // Must exist in profile object
-    Verified bool   `json:"verified"`   // Must exist in profile object
+data := map[string]interface{}{
+    "name":  "John Doe",
+    "email": "john@example.com",
+    "age":   float64(30),
 }
 
-var user User
-err := picker.PickToStruct(jsonStr, &user)
+user, err := picker.Pick(data, func(p *picker.Picker) User {
+    return User{
+        Name:  p.GetString("name"),
+        Email: p.GetString("email"),
+        Age:   p.GetInt("age"),
+    }
+})
+
 if err != nil {
-    // Will fail if ANY field is missing or wrong type
-    log.Fatal(err) 
+    // Validation failed - err contains which fields failed
+    log.Fatal(err)
 }
+
+// user is ready to use - all fields validated
+fmt.Printf("User: %s (%s), Age: %d\n", user.Name, user.Email, user.Age)
 ```
 
-### vs Standard JSON Parsing
-
-| **Scenario** | **`json.Unmarshal`** | **`picker.PickToStruct`** |
-|--------------|---------------------|---------------------------|
-| Missing field | ✅ Zero value (`""`, `0`, `false`) | ❌ **Error with exact path** |
-| Wrong type | ✅ Zero value | ❌ **Error with exact path** |
-| Incomplete data | ✅ Partial success | ❌ **Complete failure** |
-| Error details | ❌ Generic message | ✅ **Precise field paths** |
+### PickFromString - From JSON string
 
 ```go
-// This JSON succeeds with json.Unmarshal but FAILS with picker:
-{
-    "name": "John"
-    // Missing required fields: id, email, profile, tags
-}
+jsonStr := `{
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "age": 25
+}`
 
-// json.Unmarshal result: User{Name: "John", ID: 0, Email: "", Profile: nil, Tags: nil}
-// picker.PickToStruct error: "Missing required fields: id, email, profile, tags"
+user, err := picker.PickFromString(jsonStr, func(p *picker.Picker) User {
+    return User{
+        Name:  p.GetString("name"),
+        Email: p.GetString("email"),
+        Age:   p.GetInt("age"),
+    }
+})
+
+if err != nil {
+    // Either JSON parse error OR validation error
+    log.Fatal(err)
+}
 ```
 
-**Use `PickToStruct` when:**
-- 🛡️ **API validation** - Reject incomplete requests immediately
-- ⚙️ **Configuration parsing** - Ensure all settings are present
-- 🔍 **Data integrity** - No silent failures or missing data
-- 📊 **Contract enforcement** - JSON must match struct exactly
+### PickFromRequest - From HTTP request
+
+```go
+func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
+    user, err := picker.PickFromRequest(r, func(p *picker.Picker) User {
+        return User{
+            Name:  p.GetString("name"),
+            Email: p.GetString("email"),
+            Age:   p.GetInt("age"),
+        }
+    })
+
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    // user is validated and ready to use
+    saveUser(user)
+    w.WriteHeader(http.StatusCreated)
+}
+```
+
+### Benefits
+
+- **🎯 Type-safe** - Returns your exact struct type, not interface{}
+- **⚡ One-step** - Parse, extract, and validate in a single call
+- **🛡️ Automatic validation** - `Confirm()` is called automatically
+- **📝 Clean handlers** - Perfect for HTTP request validation
+- **🔍 Detailed errors** - Know exactly which fields failed
 
 ## API Reference
 
@@ -187,6 +225,34 @@ p := picker.NewPicker(data)
 
 // From HTTP request body
 p, err := picker.NewPickerFromRequest(r)
+```
+
+### Pick Functions (Parse + Validate + Return Typed Result)
+
+```go
+// From map[string]interface{} - parse and validate in one step
+user, err := picker.Pick(data, func(p *picker.Picker) User {
+    return User{
+        Name: p.GetString("name"),
+        Age:  p.GetInt("age"),
+    }
+})
+
+// From JSON string - parse JSON, extract, and validate
+user, err := picker.PickFromString(jsonStr, func(p *picker.Picker) User {
+    return User{
+        Name: p.GetString("name"),
+        Age:  p.GetInt("age"),
+    }
+})
+
+// From HTTP request - read body, parse, extract, and validate
+user, err := picker.PickFromRequest(r, func(p *picker.Picker) User {
+    return User{
+        Name: p.GetString("name"),
+        Age:  p.GetInt("age"),
+    }
+})
 ```
 
 ### Basic Data Extraction
@@ -303,16 +369,11 @@ data := p.GetData()  // Returns map[string]interface{}
 The generic `GetTypedArray` function provides type-safe array extraction:
 
 ```go
-// Basic types
+// Typed arrays from JSON
 strings := picker.GetTypedArray[string](p, "names")        // []string
-ints := picker.GetTypedArray[int64](p, "numbers")          // []int64  
+ints := picker.GetTypedArray[int64](p, "numbers")          // []int64
 floats := picker.GetTypedArray[float64](p, "scores")       // []float64
 bools := picker.GetTypedArray[bool](p, "flags")            // []bool
-
-// Big number types
-bigints := picker.GetTypedArray[*big.Int](p, "large")      // []*big.Int
-bigfloats := picker.GetTypedArray[*big.Float](p, "precise") // []*big.Float
-bigrats := picker.GetTypedArray[*big.Rat](p, "ratios")     // []*big.Rat
 ```
 
 ## Error Handling Philosophy

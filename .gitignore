@@ -31,5 +31,8 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# macOS
+.DS_Store
+
 # Test files
 picker_test.go
