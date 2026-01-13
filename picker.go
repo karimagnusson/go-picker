@@ -2,7 +2,6 @@ package picker
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -17,13 +16,13 @@ var (
 
 func Pick[T any](data map[string]interface{}, fn func(*Picker) T) (T, error) {
 	inst := newPicker(data)
-	result := fn(inst)
+	out := fn(inst)
 	err := inst.Confirm()
 	if err != nil {
 		var zero T
 		return zero, err
 	}
-	return result, nil
+	return out, nil
 }
 
 func PickFromJson[T any](jsonStr string, fn func(*Picker) T) (T, error) {
@@ -32,12 +31,7 @@ func PickFromJson[T any](jsonStr string, fn func(*Picker) T) (T, error) {
 		var zero T
 		return zero, err
 	}
-	result, pickerErr := Pick(data, fn)
-	if pickerErr != nil {
-		var zero T
-		return zero, pickerErr
-	}
-	return result, nil
+	return Pick(data, fn)
 }
 
 func PickFromRequestBody[T any](r *http.Request, fn func(*Picker) T) (T, error) {
@@ -46,12 +40,7 @@ func PickFromRequestBody[T any](r *http.Request, fn func(*Picker) T) (T, error) 
 		var zero T
 		return zero, err
 	}
-	result, pickerErr := Pick(data, fn)
-	if pickerErr != nil {
-		var zero T
-		return zero, pickerErr
-	}
-	return result, nil
+	return Pick(data, fn)
 }
 
 func ParseJson(jsonStr string) (map[string]interface{}, error) {
@@ -232,23 +221,24 @@ func (p *Picker) GetDate(key string) time.Time {
 		p.addError(key)
 		return time.Time{}
 	}
-	parsedTime, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		p.addError(key)
+	date, ok := parseDate(value)
+	if !ok {
+		p.SetInvalid(key)
 		return time.Time{}
 	}
-	return parsedTime
+	return date
 }
+
 func (p *Picker) GetDateOr(key string, fallback time.Time) time.Time {
 	value, ok := p.data[key].(string)
 	if !ok {
 		return fallback
 	}
-	parsedTime, err := time.Parse(time.RFC3339, value)
-	if err != nil {
+	date, ok := parseDate(value)
+	if !ok {
 		return fallback
 	}
-	return parsedTime
+	return date
 }
 
 func (p *Picker) GetObject(key string) map[string]interface{} {
@@ -285,6 +275,24 @@ func (p *Picker) GetArrayOr(key string, fallback []interface{}) []interface{} {
 	return value
 }
 
+// date
+
+func parseDate(value string) (time.Time, bool) {
+	formats := []string{
+		time.RFC3339,          // "2025-01-13T10:30:00Z"
+		"2006-01-02",          // "2025-01-13"
+		"2006-01-02T15:04:05", // "2025-01-13T10:30:00"
+	}
+
+	for _, format := range formats {
+		if parsedTime, err := time.Parse(format, value); err == nil {
+			return parsedTime, true
+		}
+	}
+
+	return time.Time{}, false
+}
+
 // errors
 
 type PickerError struct {
@@ -297,6 +305,11 @@ func (pe *PickerError) Error() string {
 		keys = append(keys, key)
 	}
 	return "missing or invalid: " + strings.Join(keys, ", ")
+}
+
+func HasDetail(err error) bool {
+	_, ok := err.(*PickerError)
+	return ok
 }
 
 func Detail(err error) map[string]string {
@@ -329,18 +342,6 @@ func (npa *NestedPickerArray) GetItem(index int) *Picker {
 	return npa.Items[index]
 }
 
-func convert[T any](items []interface{}) ([]T, error) {
-	result := make([]T, 0, len(items))
-	for _, item := range items {
-		if typedItem, ok := item.(T); ok {
-			result = append(result, typedItem)
-		} else {
-			return nil, errors.New("error")
-		}
-	}
-	return result, nil
-}
-
 func GetTypedArray[T any](p *Picker, key string) []T {
 	value, ok := p.data[key].([]interface{})
 	if !ok {
@@ -348,10 +349,14 @@ func GetTypedArray[T any](p *Picker, key string) []T {
 		return []T{}
 	}
 
-	result, err := convert[T](value)
-	if err != nil {
-		p.addError(key)
-		return []T{}
+	result := make([]T, 0, len(value))
+	for _, item := range value {
+		if typedItem, ok := item.(T); ok {
+			result = append(result, typedItem)
+		} else {
+			p.addError(key)
+			return []T{}
+		}
 	}
 
 	return result
