@@ -29,16 +29,6 @@ user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
     }
 })
 
-if err != nil {
-    // Get detailed error information
-    errors := picker.Detail(err)
-    // errors = map[string]string{"email": "missing", "age": "invalid"}
-    for field, reason := range errors {
-        fmt.Printf("%s: %s\n", field, reason)
-    }
-    return
-}
-
 // user is validated and ready to use
 fmt.Printf("User: %s, %s, %d\n", user.Name, user.Email, user.Age)
 ```
@@ -142,7 +132,7 @@ p.GetString("name")                    // string
 p.GetInt("age")                        // int64 (from JSON number)
 p.GetFloat("price")                    // float64
 p.GetBool("active")                    // bool
-p.GetDate("created_at")                // time.Time (RFC3339 format)
+p.GetDate("created_at")                // time.Time (supports RFC3339, date-only, and RFC3339 without timezone)
 p.GetObject("metadata")                // map[string]interface{}
 p.GetArray("items")                    // []interface{}
 ```
@@ -170,22 +160,24 @@ user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
 })
 
 if err != nil {
-    // Get detailed error map
-    errors := picker.Detail(err)
-    // errors = map[string]string{
-    //     "name": "missing",
-    //     "age": "invalid"
-    // }
+    // Check if it's a validation error
+    if picker.HasDetail(err) {
+        // Get detailed error map
+        errors := picker.Detail(err)
+        // errors = map[string]string{
+        //     "name": "missing",
+        //     "age": "invalid"
+        // }
 
-    // If empty, it was a JSON parse error
-    if len(errors) == 0 {
-        fmt.Printf("Parse error: %v\n", err)
+        for field, reason := range errors {
+            fmt.Printf("%s: %s\n", field, reason)
+        }
         return
     }
 
-    for field, reason := range errors {
-        fmt.Printf("%s: %s\n", field, reason)
-    }
+    // Otherwise, it's a JSON parse error
+    fmt.Printf("Parse error: %v\n", err)
+    return
 }
 ```
 
@@ -201,30 +193,13 @@ jsonStr := `{
     }
 }`
 
-type Profile struct {
-    Email string
-}
-
-type User struct {
-    Name    string
-    Profile Profile
-}
-
-type Response struct {
-    User User
-}
-
-response, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Response {
+result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
     user := p.Nested("user")
     profile := user.Nested("profile")
 
-    return Response{
-        User: User{
-            Name: user.GetString("name"),
-            Profile: Profile{
-                Email: profile.GetString("email"),
-            },
-        },
+    return Result{
+        Name:  user.GetString("name"),
+        Email: profile.GetString("email"),
     }
 })
 
@@ -241,30 +216,20 @@ scores := picker.GetTypedArray[float64](p, "scores") // []float64
 // Array of objects
 jsonStr := `{
     "users": [
-        {"name": "John"},
-        {"name": "Jane"}
+        {"name": "John", "age": 30},
+        {"name": "Jane", "age": 25}
     ]
 }`
 
-type User struct {
-    Name string
-}
-
-type Response struct {
-    Users []User
-}
-
-response, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Response {
+result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
     users := p.NestedArray("users")
-    userList := make([]User, len(users.Items))
+    names := make([]string, len(users.Items))
 
-    for i, userPicker := range users.Items {
-        userList[i] = User{
-            Name: userPicker.GetString("name"),
-        }
+    for i, user := range users.Items {
+        names[i] = user.GetString("name")
     }
 
-    return Response{Users: userList}
+    return Result{Names: names}
 })
 ```
 
@@ -308,12 +273,6 @@ picker.ErrorInvalid = "inválido"
 
 ```go
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-    type User struct {
-        Name  string
-        Email string
-        Age   int64
-    }
-
     user, err := picker.PickFromRequestBody(r, func(p *picker.Picker) User {
         return User{
             Name:  p.GetString("name"),
@@ -323,17 +282,13 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
     })
 
     if err != nil {
-        // Return structured validation errors
-        errors := picker.Detail(err)
-        if len(errors) > 0 {
+        if picker.HasDetail(err) {
             w.WriteHeader(http.StatusBadRequest)
             json.NewEncoder(w).Encode(map[string]interface{}{
-                "errors": errors,
+                "errors": picker.Detail(err),
             })
             return
         }
-
-        // JSON parse error
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
     }
@@ -343,17 +298,6 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusCreated)
 }
 ```
-
-## Why go-picker?
-
-| Feature | `json.Unmarshal` | **go-picker** |
-|---------|------------------|---------------|
-| Missing fields | ✅ Zero values (`""`, `0`, `nil`) | ❌ Error with field path |
-| Wrong types | ✅ Zero values | ❌ Error with field path |
-| Validation | ❌ Manual checks needed | ✅ Automatic |
-| Error details | ❌ Generic messages | ✅ Field-by-field map |
-| All errors | ❌ Stops at first | ✅ Collects all |
-| Custom validation | ❌ Write your own | ✅ Built-in `SetError()` |
 
 ## License
 
