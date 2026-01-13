@@ -38,6 +38,7 @@ fmt.Printf("User: %s, %s, %d\n", user.Name, user.Email, user.Age)
 Traditional JSON parsing in Go has two options, both problematic:
 
 **Option 1: `json.Unmarshal`** - Silent failures
+
 ```go
 var user User
 json.Unmarshal([]byte(jsonStr), &user)
@@ -46,6 +47,7 @@ json.Unmarshal([]byte(jsonStr), &user)
 ```
 
 **Option 2: Manual validation** - Verbose and repetitive
+
 ```go
 name, ok := data["name"].(string)
 if !ok {
@@ -76,51 +78,35 @@ user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
 
 ## Features
 
-- ✅ **Automatic validation** - No manual `Confirm()` needed
-- 📊 **Detailed errors** - Know exactly which fields failed and why
-- 🎯 **Type-safe** - Returns your exact struct type
-- 🔍 **All errors at once** - Collects all validation errors in one pass
-- 🌐 **Customizable messages** - Support for internationalization
-- 🌳 **Nested support** - Clean handling of nested objects and arrays
+- **Automatic validation** - All fields validated in one operation, no manual error checking
+- **Detailed error reporting** - Returns a map of all validation errors with field paths
+- **Type-safe parsing** - Direct conversion from JSON to your structs
+- **Nested objects and arrays** - Clean API for complex JSON structures
+- **Customizable error messages** - Built-in support for internationalization
 
 ## API
 
 ### Pick Functions
 
 ```go
-// From parsed JSON data
-data, _ := picker.ParseJson(jsonStr)
-user, err := picker.Pick(data, func(p *picker.Picker) User {
-    return User{
-        Name: p.GetString("name"),
-        Age:  p.GetInt("age"),
-    }
-})
+// Pick from parsed data
+picker.Pick(data, func(p *picker.Picker) T { ... })
 
-// From JSON string (combines parsing + validation)
-user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
-    return User{
-        Name: p.GetString("name"),
-        Age:  p.GetInt("age"),
-    }
-})
+// Pick from JSON string
+picker.PickFromJson(jsonStr, func(p *picker.Picker) T { ... })
 
-// From HTTP request body
-func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-    user, err := picker.PickFromRequestBody(r, func(p *picker.Picker) User {
-        return User{
-            Name: p.GetString("name"),
-            Age:  p.GetInt("age"),
-        }
-    })
+// Pick from HTTP request body
+picker.PickFromRequestBody(r, func(p *picker.Picker) T { ... })
+```
 
-    if err != nil {
-        // Handle error
-        return
-    }
+### Helper Functions
 
-    // user is validated
-}
+```go
+// Parse JSON string into map
+data, err := picker.ParseJson(jsonStr)  // returns map[string]interface{}
+
+// Parse HTTP request body into map
+data, err := picker.ParseRequestBody(r)  // returns map[string]interface{}
 ```
 
 ### Getter Methods
@@ -149,7 +135,17 @@ p.GetObjectOr("metadata", map[string]interface{}{})
 p.GetArrayOr("tags", []interface{}{})
 ```
 
+#### Nested Objects and Arrays
+
+```go
+p.Nested("user")                       // *Picker for nested object
+p.NestedArray("users")                 // *NestedPickerArray for array of objects
+picker.GetTypedArray[T](p, "items")    // []T for typed arrays
+```
+
 ### Error Handling
+
+Use `HasDetail(err)` to check if the error is a validation error, then `Detail(err)` to get the error map:
 
 ```go
 user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
@@ -183,6 +179,8 @@ if err != nil {
 
 ### Nested Objects
 
+Use `Nested(key)` to access nested objects. Errors will include the full path:
+
 ```go
 jsonStr := `{
     "user": {
@@ -207,6 +205,8 @@ result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
 ```
 
 ### Arrays
+
+Use `GetTypedArray[T]` for arrays of primitive types, or `NestedArray` for arrays of objects:
 
 ```go
 // Typed arrays
@@ -235,11 +235,11 @@ result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
 
 ### Custom Validation
 
+Use `SetError(key, message)` to add custom validation errors or `SetInvalid(key)` to mark a field as invalid:
+
 ```go
 user, err := picker.Pick(data, func(p *picker.Picker) User {
     age := p.GetInt("age")
-
-    // Add custom validation
     if age < 18 {
         p.SetError("age", "must be 18 or older")
     }
@@ -255,16 +255,18 @@ user, err := picker.Pick(data, func(p *picker.Picker) User {
 
 ### Customizable Error Messages
 
-```go
-// Default messages
-picker.ErrorMissing = "missing"  // Field not present in JSON
-picker.ErrorInvalid = "invalid"  // Field has wrong type
+By default, validation errors will be either `"missing"` (field not present in JSON) or `"invalid"` (field has wrong type). You can customize these messages:
 
-// Customize for your needs
+```go
+// Default values
+picker.ErrorMissing = "missing"
+picker.ErrorInvalid = "invalid"
+
+// Customize for your application
 picker.ErrorMissing = "required"
 picker.ErrorInvalid = "wrong type"
 
-// Or internationalization
+// Or for internationalization
 picker.ErrorMissing = "faltante"  // Spanish
 picker.ErrorInvalid = "inválido"
 ```
