@@ -304,7 +304,7 @@ func (pe *PickerError) Error() string {
 	for key := range pe.Errors {
 		keys = append(keys, key)
 	}
-	return "missing or invalid: " + strings.Join(keys, ", ")
+	return "keys: " + strings.Join(keys, ", ")
 }
 
 func HasDetail(err error) bool {

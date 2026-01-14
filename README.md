@@ -135,11 +135,11 @@ p.GetArrayOr("tags", []interface{}{})
 #### Nested Objects and Arrays
 
 ```go
-p.Nested("user")                       // *Picker for nested object
-p.NestedArray("users")                 // *NestedPickerArray for array of objects
-picker.GetTypedArray[T](p, "items")    // []T for typed arrays
-picker.Map[T](array, func(*Picker) T)  // []T - map array items through a function
-array.At(index)                        // *Picker - get item at index with bounds checking
+p.Nested("user")                            // *Picker for nested object
+array := p.NestedArray("users")             // *NestedPickerArray for array of objects
+picker.GetTypedArray[T](p, "items")         // []T for typed arrays
+picker.Map[T](array, func(*Picker) T)       // []T - map array items through a function
+array.At(index)                             // *Picker - get item at index with bounds checking
 ```
 
 ### Error Handling
@@ -238,6 +238,9 @@ userList := picker.Map(users, func(user *picker.Picker) User {
         Age:  user.GetInt("age"),
     }
 })
+
+// Access specific item by index with bounds checking
+firstUser := users.At(0).GetString("name")  // "John"
 ```
 
 ### Custom Validation
