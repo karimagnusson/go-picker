@@ -334,12 +334,20 @@ func newNestedPickerArray(parent *Picker, items []*Picker) *NestedPickerArray {
 	}
 }
 
-func (npa *NestedPickerArray) GetItem(index int) *Picker {
+func (npa *NestedPickerArray) At(index int) *Picker {
 	if index < 0 || index >= len(npa.Items) {
 		npa.parent.addError(npa.nestedKey + "[" + strconv.Itoa(index) + "]")
 		return newPicker(map[string]interface{}{})
 	}
 	return npa.Items[index]
+}
+
+func Map[T any](npa *NestedPickerArray, fn func(*Picker) T) []T {
+	result := make([]T, len(npa.Items))
+	for i, item := range npa.Items {
+		result[i] = fn(item)
+	}
+	return result
 }
 
 func GetTypedArray[T any](p *Picker, key string) []T {

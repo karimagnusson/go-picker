@@ -28,9 +28,6 @@ user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
         Age:   p.GetInt("age"),
     }
 })
-
-// user is validated and ready to use
-fmt.Printf("User: %s, %s, %d\n", user.Name, user.Email, user.Age)
 ```
 
 ## The Problem
@@ -78,11 +75,11 @@ user, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) User {
 
 ## Features
 
-- **Automatic validation** - All fields validated in one operation, no manual error checking
-- **Detailed error reporting** - Returns a map of all validation errors with field paths
-- **Type-safe parsing** - Direct conversion from JSON to your structs
-- **Nested objects and arrays** - Clean API for complex JSON structures
-- **Customizable error messages** - Built-in support for internationalization
+-   **Automatic validation** - All fields validated in one operation, no manual error checking
+-   **Detailed error reporting** - Returns a map of all validation errors with field paths
+-   **Type-safe parsing** - Direct conversion from JSON to your structs
+-   **Nested objects and arrays** - Clean API for complex JSON structures
+-   **Customizable error messages** - Built-in support for internationalization
 
 ## API
 
@@ -141,6 +138,8 @@ p.GetArrayOr("tags", []interface{}{})
 p.Nested("user")                       // *Picker for nested object
 p.NestedArray("users")                 // *NestedPickerArray for array of objects
 picker.GetTypedArray[T](p, "items")    // []T for typed arrays
+picker.Map[T](array, func(*Picker) T)  // []T - map array items through a function
+array.At(index)                        // *Picker - get item at index with bounds checking
 ```
 
 ### Error Handling
@@ -206,14 +205,14 @@ result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
 
 ### Arrays
 
-Use `GetTypedArray[T]` for arrays of primitive types, or `NestedArray` for arrays of objects:
+Use `GetTypedArray[T]` for arrays of primitive types, or `NestedArray` with `Map` to transform arrays of objects:
 
 ```go
-// Typed arrays
+// Typed arrays of primitives
 tags := picker.GetTypedArray[string](p, "tags")     // []string
 scores := picker.GetTypedArray[float64](p, "scores") // []float64
 
-// Array of objects
+// Array of objects - using Map
 jsonStr := `{
     "users": [
         {"name": "John", "age": 30},
@@ -223,13 +222,21 @@ jsonStr := `{
 
 result, err := picker.PickFromJson(jsonStr, func(p *picker.Picker) Result {
     users := p.NestedArray("users")
-    names := make([]string, len(users.Items))
 
-    for i, user := range users.Items {
-        names[i] = user.GetString("name")
-    }
+    // Map to extract just the names
+    names := picker.Map(users, func(user *picker.Picker) string {
+        return user.GetString("name")
+    })
 
     return Result{Names: names}
+})
+
+// Or map to structs
+userList := picker.Map(users, func(user *picker.Picker) User {
+    return User{
+        Name: user.GetString("name"),
+        Age:  user.GetInt("age"),
+    }
 })
 ```
 
