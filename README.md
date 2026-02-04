@@ -2,7 +2,7 @@
 
 **Type-safe JSON validation for Go with clear error messages**
 
-Parse JSON data and validate all required fields in one operation. No repetitive error checking, no silent failures with zero values.
+Validate all required fields and collect every error in one step. No repetitive error checking, no silent failures with zero values.
 
 ## Installation
 
@@ -57,7 +57,7 @@ if !ok {
 // ... repeat for every field
 ```
 
-## The Solution
+## With go-picker
 
 go-picker validates **all required fields** and collects **all errors** in one pass:
 
